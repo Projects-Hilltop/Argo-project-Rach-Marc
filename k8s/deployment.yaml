@@ -15,8 +15,6 @@
 	    spec:
 	      containers:
 	      - name: my-argo-app
-	        image: <your-docker-image>
+	        image: rachelndah/my-argo-app:latest
 	        ports:
 	        - containerPort: 3000
-
-
