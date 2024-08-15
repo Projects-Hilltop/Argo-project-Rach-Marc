@@ -8,7 +8,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/<your-username>/my-argo-app.git"
+    "url": "https://github.com/Racheltembi/my-argo-app.git"
   },
   "keywords": [
     "Node.js",
@@ -16,7 +16,7 @@
     "ArgoCD",
     "Kubernetes"
   ],
-  "author": "<Your Name>",
+  "author": "Rachel",
   "license": "MIT",
   "dependencies": {
     "express": "^4.17.3"
