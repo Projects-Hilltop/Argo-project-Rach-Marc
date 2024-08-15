@@ -1,0 +1,162 @@
+1. Set Up AWS Environment
+1.1. Create an AWS Account
+If you don't have an AWS account, sign up at AWS.
+1.2. Launch EC2 Instances
+Step 1: Open the EC2 dashboard from the AWS Management Console.
+Step 2: Click on Launch Instance.
+Step 3: Choose an Amazon Machine Image (AMI). Use the Amazon Linux 2 AMI or Ubuntu.
+Step 4: Select an instance type. Choose t2.medium or t2.micro (eligible for the free tier) based on your needs.
+Step 5: Configure instance details. Set the number of instances to at least 3 (1 for ArgoCD and 2 for Kubernetes workers). Ensure you assign the instances to a VPC (default is fine) and enable public IP if needed.
+Step 6: Add storage (use the defaults).
+Step 7: Configure security groups. Allow SSH (port 22) and HTTP (port 80) from anywhere (0.0.0.0/0). Also, allow access to ports 8080 and 3000 for ArgoCD and your application.
+Step 8: Review and launch the instance. Download the private key file (.pem) when prompted.
+1.3. Connect to Your EC2 Instances
+Use SSH to connect to each EC2 instance:
+bash
+Copy code
+ssh -i /path/to/your-key.pem ec2-user@your-ec2-public-ip
+2. Set Up Kubernetes Cluster
+2.1. Install Docker
+On each EC2 instance:
+
+bash
+Copy code
+sudo yum update -y
+sudo yum install docker -y
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo usermod -aG docker ec2-user
+2.2. Install kubeadm, kubectl, and kubelet
+On each EC2 instance:
+
+bash
+Copy code
+sudo apt-get update && sudo apt-get install -y apt-transport-https curl
+curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+cat <<EOF | sudo tee /etc/apt/sources.list.d/kubernetes.list
+deb https://apt.kubernetes.io/ kubernetes-xenial main
+EOF
+sudo apt-get update
+sudo apt-get install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl
+2.3. Initialize Kubernetes Master Node
+On the EC2 instance designated as the master node:
+
+bash
+Copy code
+sudo kubeadm init --pod-network-cidr=192.168.0.0/16
+Follow the instructions displayed to set up kubectl for your user:
+bash
+Copy code
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+2.4. Set Up Networking (Weave or Calico)
+Install a network plugin like Weave:
+
+bash
+Copy code
+kubectl apply -f "https://cloud.weave.works/k8s/net?k8s-version=$(kubectl version | base64 | tr -d '\n')"
+2.5. Join Worker Nodes to the Cluster
+On the other EC2 instances (worker nodes), use the command provided during kubeadm init to join them to the cluster. If you didn’t save it, you can get the token from the master node:
+
+bash
+Copy code
+kubeadm token create --print-join-command
+Run the generated command on each worker node.
+
+3. Install and Configure ArgoCD
+3.1. Install ArgoCD
+On the master node:
+
+bash
+Copy code
+kubectl create namespace argocd
+kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml
+3.2. Access ArgoCD
+Set up port forwarding to access the ArgoCD UI:
+
+bash
+Copy code
+kubectl port-forward svc/argocd-server -n argocd 8080:443
+Access the UI at https://localhost:8080.
+Retrieve the initial admin password:
+bash
+Copy code
+kubectl get pods -n argocd -l app.kubernetes.io/name=argocd-server -o name | cut -d'/' -f 2
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath="{.data.password}" | base64 -d; echo
+Log in using admin and the retrieved password.
+4. Deploy the Application with ArgoCD
+4.1. Clone the GitHub Repository
+On your local machine, clone your repository:
+
+bash
+Copy code
+git clone https://github.com/<your-username>/my-argo-app.git
+4.2. Build and Push Docker Image
+Build and push the Docker image to Docker Hub:
+
+bash
+Copy code
+docker build -t <your-docker-username>/my-argo-app:latest .
+docker push <your-docker-username>/my-argo-app:latest
+4.3. Update deployment.yaml with the Image
+Ensure deployment.yaml has the correct image name:
+
+yaml
+Copy code
+image: <your-docker-username>/my-argo-app:latest
+4.4. Commit and Push Changes
+Commit and push your changes to GitHub:
+
+bash
+Copy code
+git add .
+git commit -m "Added Kubernetes manifests"
+git push origin main
+4.5. Create an ArgoCD Application
+Create an ArgoCD application to manage your deployment:
+
+yaml
+Copy code
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: my-argo-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: 'https://github.com/<your-username>/my-argo-app'
+    targetRevision: HEAD
+    path: 'k8s'
+  destination:
+    server: 'https://kubernetes.default.svc'
+    namespace: default
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+Apply the configuration:
+
+bash
+Copy code
+kubectl apply -f my-argo-app-argocd.yaml
+5. Access the Deployed Application
+Retrieve the application service's external IP:
+bash
+Copy code
+kubectl get svc my-argo-app
+If using AWS, ensure your EC2 security group allows traffic on the relevant ports.
+Open the application in your browser using the external IP.
+6. Manage and Scale Your Application
+Scale: Modify the replicas field in deployment.yaml and commit the change. ArgoCD will automatically sync the new state to your Kubernetes cluster.
+Monitor: Use the ArgoCD UI to monitor application health, sync status, and logs.
+7. Clean Up
+After you're done, terminate your EC2 instances to avoid incurring additional costs:
+
+bash
+Copy code
+aws ec2 terminate-instances --instance-ids <instance-id>
+Conclusion
+By following these steps, you will have deployed a Node.js application on an AWS EC2-based Kubernetes cluster using ArgoCD for continuous deployment. This setup ensures that any changes you make to your GitHub repository are automatically applied to your Kubernetes cluster, maintaining a consistent and automated deployment process.
