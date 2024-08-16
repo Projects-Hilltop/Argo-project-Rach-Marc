@@ -21,8 +21,8 @@ On each EC2 instance:
 
 bash
 Copy code
-sudo yum update -y
-sudo yum install docker -y
+sudo apt update -y
+sudo apt install docker -y
 sudo systemctl start docker
 sudo systemctl enable docker
 sudo usermod -aG docker ec2-user
