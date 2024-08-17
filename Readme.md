@@ -31,9 +31,10 @@ Setup Instructions
 1. Clone the Repository
 First, clone this repository to your local machine:
 
-Copy code
+```sh
 git clone https://github.com/<your-username>/my-argo-app.git
 cd my-argo-app
+```
 2. Build and Push the Docker Image
 Build the Docker image for the application and push it to a container registry (e.g., Docker Hub).
 
